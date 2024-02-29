@@ -1,55 +1,53 @@
-import { getUserByUsername } from '../../db/users.js' 
-import bcrypt from 'bcrypt'
-import { generateTokens, sendRefreshToken } from '../../utils/jwt.js'
-import { userTransformer } from '../../utils/transformers.js'
-import { createRefreshToken } from '../../db/refreshTokens.js'
-
+import { getUserByUsername } from "../../db/users.js"
+import bcrypt from "bcrypt"
+import { generateTokens, sendRefreshToken } from "../../utils/jwt.js"
+import { userTransformer } from "~~/server/transformers/user.js"
+import { createRefreshToken } from "../../db/refreshTokens.js"
+import { sendError } from "h3"
+import { readBody } from 'h3'
 
 export default defineEventHandler(async (event) => {
-    const body = await useBody(event)
+    const body = await readBody(event)
 
-    const { email, password } = body
+    const { username, password } = body
 
-    if(!username || !password) {
-        return sendError(event, createError({ statusCode: 400, statusMessage: 'Invalid Params' }))
+    if (!username || !password) {
+        return sendError(event, createError({
+            statusCode: 400,
+            statusMessage: 'Ivalid params'
+        }))
     }
 
-
-    // Is the User registered
     const user = await getUserByUsername(username)
 
-    if(!user){
-        return sendError(event, createError({ statusCode: 404, statusMessage: 'Username or Password is Invalid' }))
+    if (!user) {
+        return sendError(event, createError({
+            statusCode: 400,
+            statusMessage: 'Username or password is invalid'
+        }))
     }
 
-
-    // Compare Passwords
     const doesThePasswordMatch = await bcrypt.compare(password, user.password)
 
-    if(!doesThePasswordMatch){
-        return sendError(event, createError({ statusCode: 404, statusMessage: 'Username or Password is Invalid' }))
+    if (!doesThePasswordMatch) {
+        return sendError(event, createError({
+            statusCode: 400,
+            statusMessage: 'Username or password is invalid'
+        }))
     }
-
-
-    // Generate Tokens 
-    // Access Tokens
-    // Refresh Tokens
 
     const { accessToken, refreshToken } = generateTokens(user)
 
-    // Save it inside db
-
     await createRefreshToken({
         token: refreshToken,
-        userId: user.id,
+        userId: user.id
     })
 
-
-    // Add http only cookie
     sendRefreshToken(event, refreshToken)
 
     return {
-        access_token: accessToken, user: userTransformer(user), 
         
+        access_token: accessToken, user: userTransformer(user)
     }
-})
+
+}) 
